@@ -22,16 +22,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+# requires json module
+
 import os
 import sys
 import json
 import getopt
 import urllib2, urllib
-from multiprocessing import Process
-
-def save_photo(url, filename):
-        print "Saving" + filename
-        urllib.urlretrieve(url, filename)
+from multiprocessing import Pool
 
 def main():
     try:
@@ -62,6 +60,10 @@ def usage():
     token in the url to the command line
     """
     
+def save_photo(url, filename):
+    print "Saving" + filename
+    urllib.urlretrieve(url, filename)
+    
 def scrape_photos(token):
     # Setup directory to store photos
     scrape_dir = os.path.join(os.curdir,"facebook")
@@ -76,13 +78,19 @@ def scrape_photos(token):
     url = "http://graph.facebook.com/me/photos?access_token=%s&limit=%d" % \
         (token, limit)
     data = urllib2.urlopen(url)
-    photos = json.loads(data.read())
+    graph = json.loads(data.read())
     
-    for i, photo in enumerate(photos["data"]):
+    pool = Pool(processes=25)
+    
+    for i, photo in enumerate(graph["data"]):
         purl = photo["source"]
         filename = os.path.join(scrape_dir, "facebook_%s.jpg" % i)
-        p = Process(target=save_photo, args=(purl, filename))
-        p.start()
+        pool.apply_async(save_photo, [purl, filename])
+        
+    pool.close()
+    pool.join()
+        
+
 
 if __name__ == '__main__':
     main()

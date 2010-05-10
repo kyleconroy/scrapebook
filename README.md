@@ -10,9 +10,11 @@ Python 2.6, which can be found here: <http://www.python.org/download/>
 
 Since the Graph API uses OAuth 2.0, this script requires an extra step. Log into Facebook and head over to <http://developers.facebook.com/docs/api>. Click on the "Photos: http://graph.facebook.com/me/photos" link, and copy the access_token variable from the address bar. Simply pass this value into the script as shown 
 
-    python scrapebook.py -t AUTH_TOKEN
+    python scrapebook.py -t "AUTH_TOKEN"
     
 and all your data will be downloaded into a folder titled "facebook" in the current directory
+
+Note: The quotes around the access token are very important
 
 **LONG LIVE DATA LIBERATION**
 
