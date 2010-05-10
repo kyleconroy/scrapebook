@@ -1,5 +1,4 @@
-# Scrapebook 
-
+# Scrapebook
 ## Because Facebook shouldn't own your soul
 
 Scrapebook uses Facebook's Graph API to download all your data from Facebook to your personal computer. Currently, the script only downloads photos, but I may add support for notes and statuses in the future. 
