@@ -4,7 +4,7 @@ Scrapebook uses Facebook's Graph API to download all your data from Facebook to 
 
 ### Requirements
 
-Python 2.6
+Python 2.6, which can be found here: <http://www.python.org/download/>
 
 ### Usage
 
