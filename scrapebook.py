@@ -62,7 +62,10 @@ def usage():
     
 def save_photo(url, filename):
     print "Saving" + filename
-    urllib.urlretrieve(url, filename)
+    try:
+        urllib.urlretrieve(url, filename)
+    except urllib.HTTPError:
+        print "Could not open url:%s" % url 
     
 def scrape_photos(token):
     # Setup directory to store photos
@@ -77,7 +80,12 @@ def scrape_photos(token):
     limit = 10000 #Too big? Nah.....
     url = "http://graph.facebook.com/me/photos?access_token=%s&limit=%d" % \
         (token, limit)
-    data = urllib2.urlopen(url)
+    try:
+        data = urllib2.urlopen(url)
+    except urllib2.HTTPError:
+        print "Please check to make sure you have properly copied over your auth token and put it in quotes"
+        sys.exit(1);
+        
     graph = json.loads(data.read())
     
     pool = Pool(processes=25)
