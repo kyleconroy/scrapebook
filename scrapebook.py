@@ -37,9 +37,9 @@ from multiprocessing import Pool
 try :
     from django.template.defaultfilters import slugify
 except ImportError:
-    slugify = standalone_slugify
+    slugify = stand_slugify
     
-def standalone_slugify(inStr):
+def stand_slugify(inStr):
     removelist = ["a", "an", "as", "at", "before", "but", "by", "for","from","is", "in", "into", "like", "of", "off", "on", "onto","per","since", "than", "the", "this", "that", "to", "up", "via","with"];
     for a in removelist:
         aslug = re.sub(r'\b'+a+r'\b','',inStr)
