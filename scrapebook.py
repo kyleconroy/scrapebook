@@ -34,11 +34,6 @@ import re
 from multiprocessing import Pool
 
 # Need to remove this dependency 
-try :
-    from django.template.defaultfilters import slugify
-except ImportError:
-    slugify = stand_slugify
-    
 def stand_slugify(inStr):
     removelist = ["a", "an", "as", "at", "before", "but", "by", "for","from","is", "in", "into", "like", "of", "off", "on", "onto","per","since", "than", "the", "this", "that", "to", "up", "via","with"];
     for a in removelist:
@@ -46,6 +41,11 @@ def stand_slugify(inStr):
     aslug = re.sub('[^\w\s-]', '', aslug).strip().lower()
     aslug = re.sub('\s+', '-', aslug)
     return aslug
+
+try :
+    from django.template.defaultfilters import slugify
+except ImportError:
+    slugify = stand_slugify
 
 def usage():
     print """
