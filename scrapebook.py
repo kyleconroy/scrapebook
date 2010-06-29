@@ -31,25 +31,9 @@ import getopt
 import urllib2, urllib
 from multiprocessing import Pool
 
-def main():
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "t:h", ["token", "help"])
-    except getopt.GetoptError, err:
-        # print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
-        usage()
-        sys.exit(2)
-        
-    if not len(opts):
-        usage()
-        sys.exit(2)
-    
-    for o, a in opts:
-        if o in ("-t", "--token"):
-            token = a
-            scrape_photos(token)
-        else:
-            usage()
+# Need to remove this dependency 
+from django.template.defaultfilters import slugify
+
 
 def usage():
     print """
@@ -60,44 +44,136 @@ def usage():
     token in the url to the command line
     """
     
-def save_photo(url, filename):
-    print "Saving" + filename
+def save_photo(url, filename, debug):
+    if debug:
+        print "Saving" + filename
     try:
         urllib.urlretrieve(url, filename)
     except urllib.HTTPError:
-        print "Could not open url:%s" % url 
+        print "Could not open url:%s" % url
+
+class Scrapebook(object):
     
-def scrape_photos(token):
-    # Setup directory to store photos
-    scrape_dir = os.path.join(os.curdir,"facebook")
+    def __init__(self):
+        self.token = None
+        self.debug = False
+        self.base = "https://graph.facebook.com"
+        
+    def api_request(self, path, limit=10000):
+        limit = 10000 #Too big? Nah.....
+        url = "https://graph.facebook.com/%s?access_token=%s&limit=%d" % \
+            (path, self.token, limit)
+        try:
+            data = urllib2.urlopen(url)
+            data = json.loads(data.read())
+        except urllib2.HTTPError:
+            data = {}
+            
+        return data
+            
+        
+        
     
+    def setup(self):
+        scrape_dir = os.path.join(os.curdir,"facebook")
+    
+        try:
+            print "Creating facebook directory...."
+            os.mkdir(scrape_dir)
+        except OSError:
+            # Folder already exists, continue on
+            pass
+    
+    def scrape_photos(self):
+        # Setup directory to store photos
+        scrape_dir = os.path.join(os.curdir,"facebook")
+        photos_dir = os.path.join(scrape_dir,"photos")
+        me_dir = os.path.join(photos_dir,"me")
+    
+        for d in [photos_dir, me_dir]:
+            try:
+                print "Creating %s directory...." % d
+                os.mkdir(d)
+            except OSError:
+                # Folder already exists, continue on
+                pass
+        
+        graph = self.api_request("/me/photos")
+        
+        try: 
+            ps = graph["data"]
+        except:
+            ps = []
+    
+        pool = Pool(processes=25)
+    
+        print "Downloading %d photos of you...." % len(ps)
+    
+        for i, photo in enumerate(ps):
+            purl = photo["source"]
+            filename = os.path.join(me_dir, "myself_%s.jpg" % i)
+            pool.apply_async(save_photo, [purl, filename, self.debug])
+            
+        albums = self.api_request("/me/albums")
+        
+        try:
+            albums = albums["data"]
+        except:
+            albums = []
+        
+        for album in albums:
+            try:
+                albumd = slugify(album["name"])
+                album_dir = os.path.join(photos_dir,albumd)
+                print "Creating %s directory...." % album_dir
+                os.mkdir(album_dir)
+            except OSError:
+                # Folder already exists, continue on
+                pass
+            
+            photos = self.api_request("/%s/photos" % album["id"])
+            try:
+                photos = photos["data"]
+            except:
+                photos = []
+                
+            for i, photo in enumerate(photos):
+                purl = photo["source"]
+                filename = os.path.join(album_dir, "%s_%d.jpg" % (albumd, i))
+                pool.apply_async(save_photo, [purl, filename, self.debug])
+        
+        pool.close()
+        pool.join()
+        
+        
+
+        
+def main():
     try:
-        os.mkdir(scrape_dir)
-    except OSError:
-        # Folder already exists, continue on
-        pass
-    
-    limit = 10000 #Too big? Nah.....
-    url = "http://graph.facebook.com/me/photos?access_token=%s&limit=%d" % \
-        (token, limit)
-    try:
-        data = urllib2.urlopen(url)
-    except urllib2.HTTPError:
-        print "Please check to make sure you have properly copied over your auth token and put it in quotes"
-        sys.exit(1);
+        opts, args = getopt.getopt(sys.argv[1:], "t:hd", ["token", "help", "debug"])
+    except getopt.GetoptError, err:
+        # print help information and exit:
+        print str(err) # will print something like "option -a not recognized"
+        usage()
+        sys.exit(2)
+
+    if not len(opts):
+        usage()
+        sys.exit(2)
         
-    graph = json.loads(data.read())
-    
-    pool = Pool(processes=25)
-    
-    for i, photo in enumerate(graph["data"]):
-        purl = photo["source"]
-        filename = os.path.join(scrape_dir, "facebook_%s.jpg" % i)
-        pool.apply_async(save_photo, [purl, filename])
-        
-    pool.close()
-    pool.join()
-        
+    scraper = Scrapebook()
+
+    for o, a in opts:
+        if o in ("-t", "--token"):
+            scraper.token = a
+        if o in ("-d"):
+            scraper.debug = True
+        else:
+            usage()
+            
+    if scraper.token:
+        scraper.setup()
+        scraper.scrape_photos()
 
 
 if __name__ == '__main__':
