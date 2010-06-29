@@ -58,6 +58,7 @@ class Scrapebook(object):
         self.token = None
         self.debug = False
         self.base = "https://graph.facebook.com"
+        self.pool = None
         
     def api_request(self, path, limit=10000):
         limit = 10000 #Too big? Nah.....
@@ -83,6 +84,8 @@ class Scrapebook(object):
         except OSError:
             # Folder already exists, continue on
             pass
+            
+        self.pool = Pool(processes=35)
     
     def scrape_photos(self):
         # Setup directory to store photos
@@ -105,14 +108,12 @@ class Scrapebook(object):
         except:
             ps = []
     
-        pool = Pool(processes=25)
-    
         print "Downloading %d photos of you...." % len(ps)
     
         for i, photo in enumerate(ps):
             purl = photo["source"]
             filename = os.path.join(me_dir, "myself_%s.jpg" % i)
-            pool.apply_async(save_photo, [purl, filename, self.debug])
+            self.pool.apply_async(save_photo, [purl, filename, self.debug])
             
         albums = self.api_request("/me/albums")
         
@@ -140,13 +141,17 @@ class Scrapebook(object):
             for i, photo in enumerate(photos):
                 purl = photo["source"]
                 filename = os.path.join(album_dir, "%s_%d.jpg" % (albumd, i))
-                pool.apply_async(save_photo, [purl, filename, self.debug])
-        
-        pool.close()
-        pool.join()
-        
+                self.pool.apply_async(save_photo, [purl, filename, self.debug])
         
 
+        
+    def run(self):
+        self.setup()
+        
+        self.scrape_photos()
+        
+        self.pool.close()
+        self.pool.join()
         
 def main():
     try:
@@ -172,8 +177,7 @@ def main():
             usage()
             
     if scraper.token:
-        scraper.setup()
-        scraper.scrape_photos()
+        scraper.run()
 
 
 if __name__ == '__main__':
