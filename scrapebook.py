@@ -33,8 +33,11 @@ import sys
 import urllib
 import urllib2
 
+from urlparse import urlparse
+
+
 # Async Functions
-def save_photo(url, filename):
+def save_file(url, filename):
     """Save a photo.
     
     Args:
@@ -157,7 +160,21 @@ class Scrapebook(object):
             for i, photo in enumerate(photos):
                 purl = photo["source"]
                 filename = os.path.join(album_dir, "%s_%d.jpg" % (name, i))
-                self.pool.apply_async(save_photo, [purl, filename])
+                self.pool.apply_async(save_file, [purl, filename])
+
+    def scrape_videos(self):
+        """Scrape all videos a user is tagged in, and all videos created by the user."""
+        videos_dir = self._create_dir("facebook", "videos")
+
+        my_videos = self.api_request("/me/videos/uploaded")["data"]
+        video_tags = self.api_request("/me/videos")["data"]
+
+        for video in my_videos + video_tags:
+            name = self._clean(video["name"])
+            fn, ext = os.path.splitext(urlparse(video["source"]).path)
+            vurl = video["source"]
+            filename = os.path.join(videos_dir, "%s%s" % (name, ext))
+            self.pool.apply_async(save_file, [vurl, filename])
 
     def scrape_notes(self):
         """Scrape all notes a user composed or a user is tagged in."""
@@ -168,14 +185,14 @@ class Scrapebook(object):
             title = self._clean(n["subject"][:15])
             filename = os.path.join(notes_dir, "%s.txt" % title)
             self.pool.apply_async(save_note, [n, filename])
-            
-        
+
     def run(self):
         self._create_dir("facebook")
         
         self.scrape_photos()
         self.scrape_notes()
-        
+        self.scrape_videos()
+
         self.pool.close()
         self.pool.join()
         

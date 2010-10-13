@@ -1,11 +1,12 @@
 # Scrapebook - Because Facebook shouldn't own your soul
 
-Scrapebook uses Facebook's Graph API to download all your data from Facebook to your personal computer. Currently, the script only downloads:
+Scrapebook uses Facebook's Graph API to download all your data from Facebook to your personal computer. Currently, the script downloads:
 
 * Photos
 * Notes
+* Videos
 
-The next version will download your friends and events
+Friends and Events are next
 
 ### Requirements
 
