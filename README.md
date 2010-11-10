@@ -6,7 +6,11 @@ Scrapebook uses Facebook's Graph API to download all your data from Facebook to 
 * Notes
 * Videos
 
-Friends and Events are next
+Events are next
+
+### Limitations
+
+Due to Facebook's policies, I cannot download your friend's email addresses, instant messaging usernames, or physical addresses. If you want this to change, please send a complaint to Facebook.
 
 ### Requirements
 
