@@ -14,7 +14,7 @@ Due to Facebook's policies, I cannot download your friend's email addresses, ins
 
 ### Requirements
 
-Python 2.6, which can be found here: <http://www.python.org/download/>
+Python 2.6, 2.7, or 3.2, which can be found here: <http://www.python.org/download/>
 
 ### Usage
 

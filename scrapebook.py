@@ -4,6 +4,8 @@
 # 
 # Copyright (c) 2010 Kyle Conroy
 # 
+# (Python 3 compatability fixes made by Mark Nenadov)
+# 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
@@ -22,6 +24,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+import sys
+
+PY3 = sys.version_info[0] == 3
+
 # requires json module
 
 import json
@@ -29,11 +35,18 @@ import logging
 import multiprocessing
 import os
 import optparse
-import sys
-import urllib
-import urllib2
 
-from urlparse import urlparse
+
+if PY3:
+    from urllib.request import urlretrieve
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+    import urllib.parse as urlparse
+else:
+    from urllib import urlretrieve
+    from urllib import urlopen
+    from urllib2 import HTTPError
+    from urlparse import urlparse
 
 
 # Async Functions
@@ -46,8 +59,8 @@ def save_file(url, filename):
     """
     logging.debug("Saving" + filename)
     try:
-        urllib.urlretrieve(url, filename)
-    except urllib.HTTPError:
+        urlretrieve(url, filename)
+    except HTTPError:
         logging.error("Could not open url:%s" % url)
 
 def save_note(note, filename):
@@ -133,9 +146,13 @@ class Scrapebook(object):
             (path, self.token, limit)
 
         try:
-            data = urllib2.urlopen(url)
-            data = json.loads(data.read())
-        except urllib2.HTTPError:
+            data = urlopen(url)
+            if PY3:
+                json_data = str(data.read(), 'utf-8')
+            else:
+                json_data = data.read()
+            data = json.loads(json_data)
+        except HTTPError:
             logging.error("Could not retreive %s" % url)
             data = {}
 
