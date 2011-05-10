@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 #
 # The MIT License
-# 
+#
 # Copyright (c) 2010 Kyle Conroy
-# 
+#
 # (Python 3 compatability fixes made by Mark Nenadov)
-# 
+#
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-# 
+#
 # The above copyright notice and this permission notice shall be included in
 # all copies or substantial portions of the Software.
-# 
+#
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28,14 +28,12 @@ import sys
 
 PY3 = sys.version_info[0] == 3
 
-# requires json module
-
 import json
 import logging
 import multiprocessing
 import os
-import optparse
-
+import argparse
+import urllib
 
 if PY3:
     from urllib.request import urlretrieve
@@ -48,11 +46,16 @@ else:
     from urllib2 import HTTPError
     from urlparse import urlparse
 
+USER_FIELDS = [
+    "first_name", "last_name", "gender", "username", "email",
+    "about", "bio", "birthday", "education", "hometown", "sports",
+    "relationship_status", "religion", "website", "work",
+    ]
 
 # Async Functions
 def save_file(url, filename):
     """Save a photo.
-    
+
     Args:
       url: The url of the photo
       filename: The filename of the new photo
@@ -62,6 +65,7 @@ def save_file(url, filename):
         urlretrieve(url, filename)
     except HTTPError:
         logging.error("Could not open url:%s" % url)
+
 
 def save_note(note, filename):
     """Save a note
@@ -81,13 +85,14 @@ def save_note(note, filename):
         logging.error("Could not save note %s" % filename)
         f.close()
 
+
 class Scrapebook(object):
     """ Scrapebook downloads all your data from Facebook to your computer.
 
     Scrapebook connects to the Facebook Graph API.
     """
-    
-    def __init__(self, token):
+
+    def __init__(self, token, resources=None):
         """Create a new Scrape book object.
 
         Args:
@@ -96,6 +101,7 @@ class Scrapebook(object):
         self.base = "https://graph.facebook.com"
         self.pool = multiprocessing.Pool(processes=35)
         self.token = token
+        self.resources = resources or ["photos", "friends", "videos", "notes"]
 
     def _clean(self, s):
         """Returns a safe and clean filename for any given string
@@ -112,7 +118,7 @@ class Scrapebook(object):
         """Create a directory inside the Facebook directory.
 
         Will not complain if the directory already exists.
-        
+
         Args:
           Various directory names
 
@@ -120,15 +126,15 @@ class Scrapebook(object):
           The path to the new directory
         """
         path = os.path.join(*args)
-        path = os.path.join(os.curdir,path)
+        path = os.path.join(os.curdir, path)
 
         if not os.path.isdir(path):
             logging.debug("Creating directory: %s" % path)
             os.mkdir(path)
 
         return path
-        
-    def api_request(self, path, limit=10000):
+
+    def api_request(self, path, limit=10000, params=None):
         """Perform a Facebook Graph API request and return the data.
 
         The returned JSON is parsed into native Python objects before being
@@ -141,9 +147,12 @@ class Scrapebook(object):
         Returns:
           A dictionary. If an error occured, the returned dictionary is empty
         """
-        limit = 10000
-        url = "https://graph.facebook.com/%s?access_token=%s&limit=%d" % \
-            (path, self.token, limit)
+        params = params or {}
+        params["limit"] = 10000
+        url = ("https://graph.facebook.com/%s?access_token=%s&%s" %
+               (path, self.token, urllib.urlencode(params)))
+
+        logging.debug(url)
 
         try:
             data = urlopen(url)
@@ -156,14 +165,25 @@ class Scrapebook(object):
             logging.error("Could not retreive %s" % url)
             data = {}
 
+        if "error" in data:
+            error = data["error"]
+            logging.error("{}: {}".format(error["type"], error["message"]))
+            data = {}
+
         return data
-    
+
     def scrape_photos(self):
-        """Scrape all photos a user is tagged in, and all albums created by the user."""
+        """Scrape all tagged photos and uploaded albums"""
         photo_dir = self._create_dir("facebook", "photos")
 
-        album_data = self.api_request("/me/albums")["data"]
-        photo_albums = [("/%s/photos" % a["id"], a["name"]) for a in album_data]
+        albums = self.api_request("/me/albums")
+
+        if not albums:
+            print "Error: Could not scrape photo data"
+            return
+
+        photo_albums = [("/%s/photos" % a["id"], a["name"])
+                        for a in albums["data"]]
         photo_albums.append(("/me/photos", "me"))
 
         for album in photo_albums:
@@ -172,21 +192,29 @@ class Scrapebook(object):
 
             album_dir = self._create_dir("facebook", "photos", name)
 
-            photos = self.api_request(url)["data"]
-                
-            for i, photo in enumerate(photos):
+            photos = self.api_request(url)
+
+            if not photos:
+                print "Error: Could not download album"
+                continue
+
+            for i, photo in enumerate(photos["data"]):
                 purl = photo["source"]
                 filename = os.path.join(album_dir, "%s_%d.jpg" % (name, i))
                 self.pool.apply_async(save_file, [purl, filename])
 
     def scrape_videos(self):
-        """Scrape all videos a user is tagged in, and all videos created by the user."""
+        """Scrape all tagged videos and uploaded videos"""
         videos_dir = self._create_dir("facebook", "videos")
 
-        my_videos = self.api_request("/me/videos/uploaded")["data"]
-        video_tags = self.api_request("/me/videos")["data"]
+        videos = self.api_request("/me/videos/uploaded")
+        tags = self.api_request("/me/videos")
 
-        for video in my_videos + video_tags:
+        if not videos or not tags:
+            print "Error: Could not scrape your movies"
+            return
+
+        for video in videos["data"] + tags["data"]:
             name = self._clean(video["name"])
             fn, ext = os.path.splitext(urlparse(video["source"]).path)
             vurl = video["source"]
@@ -196,45 +224,72 @@ class Scrapebook(object):
     def scrape_notes(self):
         """Scrape all notes a user composed or a user is tagged in."""
         notes_dir = self._create_dir("facebook", "notes")
+        notes = self.api_request("/me/notes")
 
-        notes = self.api_request("/me/notes")["data"]
-        for n in notes:
+        if not notes:
+            print "Error: Could not scrape your notes"
+            return
+
+        for n in notes["data"]:
             title = self._clean(n["subject"][:15])
             filename = os.path.join(notes_dir, "%s.txt" % title)
             self.pool.apply_async(save_note, [n, filename])
 
+    def scrape_friends(self):
+        """Scrape all friends. Stored in JSON objects"""
+        friends_file = os.path.join("facebook", "friends.json")
+        options = {"fields": ",".join(USER_FIELDS)}
+        friends = self.api_request("/me/friends", params=options)
+
+        if not friends:
+            print "Error: Could not scrape your friends"
+            return
+
+        json.dump(friends["data"], open(friends_file, "w"))
+
     def run(self):
         self._create_dir("facebook")
-        
-        self.scrape_photos()
-        self.scrape_notes()
-        self.scrape_videos()
+
+        if "photos" in self.resources:
+            self.scrape_photos()
+
+        if "notes" in self.resources:
+            self.scrape_notes()
+
+        if "videos" in self.resources:
+            self.scrape_videos()
+
+        if "friends" in self.resources:
+            self.scrape_friends()
 
         self.pool.close()
         self.pool.join()
-        
+
+
 def main():
-    usage = "To get your authtoken, head over to http://developers.facebook.com/docs/api, \
-click on the https://graph.facebook.com/me/photos link, and copy the auth \
-token in the url to the command line"
+    usage = ("To get your authtoken, head over to http://developers."
+             "facebook.com/docs/api, click on the https://graph.facebook."
+             "com/me/photos link, and copy the auth token in the url to "
+             "the command line")
 
-    parser = optparse.OptionParser()
-    parser.add_option("-t", "--token", dest="token", help=usage)
-    parser.add_option("-d", "--debug", dest="debug", action="store_true",
-                     help="Turn on debug information")
+    parser = argparse.ArgumentParser(
+        description="Facebook shouldn't own your soul")
+    parser.add_argument("-t", "--token", dest="token", help=usage)
+    parser.add_argument("-d", "--debug", dest="debug", action="store_true",
+                        help="Turn on debug information")
+    parser.add_argument('resources', type=str, nargs='*',
+                        default=None, help='resources to scrape')
+    args = parser.parse_args()
 
-    (options, args) = parser.parse_args()
-
-    if not options.token:
+    if not args.token:
         parser.error("option -t is required")
 
-    if options.debug:
+    if args.debug:
         logging.basicConfig(level=logging.DEBUG)
 
-    scraper = Scrapebook(options.token)
+    scraper = Scrapebook(args.token, resources=args.resources)
     scraper.run()
+
 
 if __name__ == '__main__':
     main()
-
-    
